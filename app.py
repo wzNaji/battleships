@@ -40,14 +40,14 @@ if st.session_state.phase == "won":
     if st.button("Restart Game"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
 
 if st.session_state.phase == "lost":
     st.error("Game over! You lost!")
     if st.button("Try Again"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Player board ---
 st.subheader("Your Board")
