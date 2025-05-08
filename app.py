@@ -1,10 +1,10 @@
 import streamlit as st
 import numpy as np
-import random
+from core.config import grid_size, ship_lengths
+from core.game_logic import is_valid_ship_selection, place_opponent_ships, all_ships_sunk
+from core.ai import get_computer_target
 
-grid_size = 5
-ship_lengths = [3, 2]
-
+# --- Initialize session state ---
 if "player_board" not in st.session_state:
     st.session_state.player_board = np.zeros((grid_size, grid_size), dtype=int)
     st.session_state.opponent_board = np.zeros((grid_size, grid_size), dtype=int)
@@ -20,26 +20,13 @@ if "player_board" not in st.session_state:
     st.session_state.sunk_ships = set()
     st.session_state.computer_hits = []
 
+# --- UI Header ---
 st.title("Battleships!")
 st.write(st.session_state.message)
 if st.session_state.error:
     st.error(st.session_state.error)
 
-def is_valid_ship_selection(cells):
-    if len(cells) < 2:
-        return True
-    rows = [r for r, _ in cells]
-    cols = [c for _, c in cells]
-    same_row = all(r == rows[0] for r in rows)
-    same_col = all(c == cols[0] for c in cols)
-    if not (same_row or same_col):
-        return False
-    if same_row:
-        return sorted(cols) == list(range(min(cols), max(cols) + 1))
-    if same_col:
-        return sorted(rows) == list(range(min(rows), max(rows) + 1))
-    return False
-
+# --- Player board rendering ---
 def handle_player_grid():
     for row in range(grid_size):
         cols = st.columns(grid_size)
@@ -86,30 +73,11 @@ def handle_player_grid():
                     label = " "
                 cols[col].button(label, key=key, disabled=True)
 
-# (rest of code unchanged)
-
-
+# --- Opponent ship placement ---
 if st.session_state.phase == "playing" and not st.session_state.opponent_ships:
-    def place_opponent_ships():
-        board = np.zeros((grid_size, grid_size), dtype=int)
-        ships = []
-        for length in ship_lengths:
-            placed = False
-            while not placed:
-                r, c = np.random.randint(0, grid_size, size=2)
-                horizontal = np.random.rand() > 0.5
-                if horizontal and c + length <= grid_size and np.all(board[r, c:c+length] == 0):
-                    board[r, c:c+length] = 1
-                    ships.append([(r, i) for i in range(c, c+length)])
-                    placed = True
-                elif not horizontal and r + length <= grid_size and np.all(board[r:r+length, c] == 0):
-                    board[r:r+length, c] = 1
-                    ships.append([(i, c) for i in range(r, r+length)])
-                    placed = True
-        return board, ships
     st.session_state.opponent_board, st.session_state.opponent_ships = place_opponent_ships()
 
-# Show opponent board for guessing
+# --- Opponent board and gameplay logic ---
 if st.session_state.phase == "playing":
     st.subheader("Opponent Board (click to guess)")
     for row in range(grid_size):
@@ -133,45 +101,31 @@ if st.session_state.phase == "playing":
                             break
                     if hit is not None:
                         st.session_state.message = f"🎯 Hit at ({row}, {col})! 💥"
-                        ship_hit = st.session_state.opponent_ships[hit]
-                        if all(st.session_state.guesses[r, c] == 1 for r, c in ship_hit):
+                        if all(st.session_state.guesses[r, c] == 1 for r, c in st.session_state.opponent_ships[hit]):
                             if hit not in st.session_state.sunk_ships:
                                 st.session_state.sunk_ships.add(hit)
                                 st.toast("🔥 You sunk a ship!", icon="🚢")
                     else:
                         st.session_state.message = f"💦 Miss at ({row}, {col})!"
-                    all_hit = all(all(st.session_state.guesses[r, c] == 1 for r, c in ship) for ship in st.session_state.opponent_ships)
-                    if all_hit:
+
+                    if all_ships_sunk(st.session_state.opponent_ships, st.session_state.guesses):
                         st.session_state.phase = "won"
                         st.session_state.message = "🏆 You sank all opponent ships!"
                     else:
-                        # Computer's turn to guess smartly
-                        def get_computer_target():
-                            # Try surrounding a hit
-                            for hr, hc in st.session_state.computer_hits:
-                                for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
-                                    nr, nc = hr+dr, hc+dc
-                                    if 0 <= nr < grid_size and 0 <= nc < grid_size and st.session_state.computer_guesses[nr, nc] == 0:
-                                        return nr, nc
-                            # Otherwise, random
-                            while True:
-                                r, c = random.randint(0, grid_size - 1), random.randint(0, grid_size - 1)
-                                if st.session_state.computer_guesses[r, c] == 0:
-                                    return r, c
-
-                        r, c = get_computer_target()
+                        # Computer's turn
+                        r, c = get_computer_target(st.session_state.computer_hits, st.session_state.computer_guesses, grid_size)
                         st.session_state.computer_guesses[r, c] = 1
                         if st.session_state.player_board[r, c] == 1:
                             st.session_state.computer_hits.append((r, c))
                         else:
                             st.toast(f"🤖 Computer missed at ({r}, {c})!", icon="👻")
 
-                        # Check if computer has won
-                        player_ship_cells = [cell for ship in st.session_state.player_ships for cell in ship]
-                        if all(st.session_state.computer_guesses[r, c] == 1 for r, c in player_ship_cells):
+                        player_cells = [cell for ship in st.session_state.player_ships for cell in ship]
+                        if all(st.session_state.computer_guesses[r, c] == 1 for r, c in player_cells):
                             st.session_state.phase = "lost"
                             st.session_state.message = "💥 The computer sank all your ships! Game over."
 
+# --- End game states ---
 if st.session_state.phase == "won":
     st.success("Game over! You won!")
     if st.button("Restart Game"):
@@ -186,9 +140,11 @@ if st.session_state.phase == "lost":
             del st.session_state[key]
         st.experimental_rerun()
 
+# --- Player board ---
 st.subheader("Your Board")
 handle_player_grid()
 
+# --- Debug info ---
 with st.expander("Debug: Show Player Board Array"):
     st.write(st.session_state.player_board.astype(int))
 
