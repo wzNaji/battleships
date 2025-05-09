@@ -5,6 +5,7 @@ from core.config import grid_size, ship_lengths
 from core.game_logic import is_valid_ship_selection, all_ships_sunk
 from core.ai import get_computer_target
 import csv
+from ml.ml_model import predict_target
 
 
 # -----------------------------------------------------------------------------
@@ -179,12 +180,8 @@ def render_opponent_board():
                 remaining = _remaining_lengths(
                     st.session_state.player_ships, st.session_state.computer_guesses
                 )
-                r, c = get_computer_target(
-                    st.session_state.computer_hits,
-                    st.session_state.computer_guesses,
-                    grid_size,
-                    remaining_lengths=remaining,
-                )
+                board_flat = st.session_state.computer_guesses.flatten().astype(int).tolist()
+                r, c = predict_target(board_flat)
                 st.session_state.computer_guesses[r, c] = 1
 
                 # --- Log training data for DNN ---
