@@ -4,6 +4,7 @@ import streamlit as st
 from core.config import grid_size, ship_lengths
 from core.game_logic import is_valid_ship_selection, all_ships_sunk
 from core.ai import get_computer_target
+import csv
 
 
 # -----------------------------------------------------------------------------
@@ -185,6 +186,14 @@ def render_opponent_board():
                     remaining_lengths=remaining,
                 )
                 st.session_state.computer_guesses[r, c] = 1
+
+                # --- Log training data for DNN ---
+
+                with open("ml/dataset.csv", "a", newline="") as f:
+                    writer = csv.writer(f)
+                    board_flat = st.session_state.computer_guesses.flatten().astype(int).tolist()
+                    writer.writerow(board_flat + [r, c, int(st.session_state.player_board[r, c] == 1)])
+
 
                 if st.session_state.player_board[r, c] == 1:
                     st.session_state.computer_hits.append((r, c))
