@@ -40,7 +40,7 @@ print("Training model...")
 model.fit(
     X_train,
     y_train,
-    epochs=20,
+    epochs=10,
     batch_size=8,
     validation_data=(X_test, y_test)
 )

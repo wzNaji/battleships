@@ -36,4 +36,4 @@ def place_opponent_ships():
     
 
 def all_ships_sunk(ships, guesses):
-    return all(all(guesses[r, c] == 1 for r, c in ship) for ship in ships)
+    return all(all(guesses[r, c] != 0 for r, c in ship) for ship in ships)
